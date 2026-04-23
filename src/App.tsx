@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import LoginPage from './pages/Login/LoginPage';
 import MainPage from './pages/Home/MainPage';
+import OAuthCallback from './pages/OAuth/OAuthCallback';
 
 function App() {
   return (
@@ -11,6 +12,8 @@ function App() {
         
         {/* 로그인이 성공해서 이쪽으로 리다이렉트 되면 메인 화면이 뜹니다 */}
         <Route path="/home" element={<MainPage />} />
+
+        <Route path="/oauth/callback" element={<OAuthCallback />} />
       </Routes>
     </BrowserRouter>
   );

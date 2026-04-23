@@ -1,0 +1,23 @@
+{
+	"mcpServers": {
+		"mysql": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@benborla29/mcp-server-mysql"
+			],
+			"env": {
+				"MYSQL_HOST": "116.37.141.23",
+				"MYSQL_PORT": "3307",
+				"MYSQL_USER": "root",
+				"MYSQL_PASS": "mysecretpassword123!",
+				"MYSQL_DB": "account_book",
+				"ALLOW_INSERT_OPERATION": "true",
+				"ALLOW_UPDATE_OPERATION": "true",
+				"ALLOW_DELETE_OPERATION": "false"
+			},
+			"disabled": false,
+			"alwaysAllow": []
+		}
+	}
+}
