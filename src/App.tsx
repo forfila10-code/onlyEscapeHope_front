@@ -14,6 +14,8 @@ function App() {
         <Route path="/home" element={<MainPage />} />
 
         <Route path="/oauth/callback" element={<OAuthCallback />} />
+
+        <Route path="/login" element={<LoginPage />} />
       </Routes>
     </BrowserRouter>
   );

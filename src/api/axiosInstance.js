@@ -22,4 +22,14 @@ api.interceptors.request.use(
   }
 );
 
+// 3. 응답(Response) 인터셉터 — 인증 실패 처리
+//    401/403은 각 컴포넌트에서 직접 처리 (자동 리다이렉트 없음)
+//    → 백엔드 JWT 검증 문제 디버깅 중에 무한 루프 방지
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export default api;

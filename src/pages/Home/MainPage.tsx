@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 // @ts-ignore
 import TransactionModal from '../../components/TransactionModal';
+// @ts-ignore
+import MonthlyDashboard from '../../components/MonthlyDashboard';
+// @ts-ignore
+import ExpenseChart from '../../components/ExpenseChart';
 
 const RECENT_ITEMS = [
   { id: 1, emoji: '🍽️', emojiColor: 'bg-orange-100', title: '스타벅스 강남점', sub: '식비 • 오늘 13:00', amount: '-9,000원', isExpense: true },
@@ -30,6 +34,15 @@ function MainPage() {
 
       {/* ── 스크롤 가능한 메인 콘텐츠 ── */}
       <main className="flex-1 overflow-y-auto px-4 pt-4 pb-32 space-y-3">
+
+        {/* ── 달력 탭: 월간 대시보드 ── */}
+        {activeTab === 'calendar' && <MonthlyDashboard />}
+
+        {/* ── 통계 탭: 카테고리별 지출 차트 ── */}
+        {activeTab === 'stats' && <ExpenseChart />}
+
+        {/* 홈 탭 콘텐츠 */}
+        {activeTab !== 'calendar' && activeTab !== 'stats' && <>
 
         {/* 잔액 카드 — 다크 그라데이션 */}
         <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 rounded-3xl p-6 relative overflow-hidden">
@@ -114,6 +127,8 @@ function MainPage() {
             내역 더 보기
           </button>
         </div>
+
+        </>}
 
       </main>
 
