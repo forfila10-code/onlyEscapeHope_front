@@ -40,7 +40,25 @@ const CATEGORY_EMOJI = {
   기타: '📦', 급여: '💰', 용돈: '💵', 이자: '🏦',
 };
 
-const fmt = (n) => Math.abs(n).toLocaleString('ko-KR');
+const toAmount = (value) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const fmt = (n) => Math.abs(toAmount(n)).toLocaleString('ko-KR');
+
+const fmtPercent = (ratio) =>
+  Number.isFinite(ratio) ? `${(ratio * 100).toFixed(1)}%` : '0.0%';
+
+const toPercentRatio = (value) => {
+  const percent = toAmount(value);
+  if (percent <= 0) return null;
+  return percent > 1 ? percent / 100 : percent;
+};
 
 // categoryBreakdown 항목에서 정규화된 타입 추출
 // 서버 응답 type: 'income' | 'expense' (소문자)
@@ -50,12 +68,14 @@ const normalizeType = (type) =>
 // ── 커스텀 툴팁 ─────────────────────────────────────────
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
-  const { name, value, percent } = payload[0].payload;
+  const item = payload[0];
+  const { name, value } = item.payload;
+  const percent = Number(item.payload.percent ?? item.percent);
   return (
     <div className="bg-white rounded-2xl shadow-lg px-4 py-3 text-center border border-gray-100">
       <p className="text-xs font-bold text-gray-700">{name}</p>
       <p className="text-sm font-extrabold text-gray-900 mt-0.5">{fmt(value)}원</p>
-      <p className="text-xs text-gray-400">{(percent * 100).toFixed(1)}%</p>
+      <p className="text-xs text-gray-400">{fmtPercent(percent)}</p>
     </div>
   );
 };
@@ -113,23 +133,31 @@ export default function ExpenseChart() {
   // type은 소문자 'income' | 'expense'
   const chartData = useMemo(() => {
     const breakdown = summary?.categoryBreakdown ?? [];
-    return breakdown
+    const data = breakdown
       .filter((item) => normalizeType(item.type) === viewType)
       .map((item) => ({
         name: item.category ?? '기타',
-        value: Number(item.totalAmount ?? 0),
+        value: toAmount(item.totalAmount ?? item.total_amount ?? item.amount ?? item.value),
+        serverPercent: toPercentRatio(item.percent),
       }))
+      .filter((item) => item.value > 0)
       .sort((a, b) => b.value - a.value);
+
+    const chartTotal = data.reduce((sum, item) => sum + item.value, 0);
+    return data.map((item) => ({
+      ...item,
+      percent: item.serverPercent ?? (chartTotal > 0 ? item.value / chartTotal : 0),
+    }));
   }, [summary, viewType]);
 
   const isExpense = viewType === 'EXPENSE';
 
   // 백엔드 totalExpense/totalIncome이 0이면 categoryBreakdown에서 직접 계산
-  const totalFromBreakdown = chartData.reduce((s, d) => s + d.value, 0);
+  const chartTotal = chartData.reduce((s, d) => s + d.value, 0);
   const totalFromServer = isExpense
-    ? Number(summary?.totalExpense ?? 0)
-    : Number(summary?.totalIncome ?? 0);
-  const total = totalFromServer > 0 ? totalFromServer : totalFromBreakdown;
+    ? toAmount(summary?.totalExpense)
+    : toAmount(summary?.totalIncome);
+  const total = totalFromServer > 0 ? totalFromServer : chartTotal;
 
   const monthLabel = `${year}년 ${month}월`;
 
@@ -260,14 +288,11 @@ export default function ExpenseChart() {
             {/* ── 순위별 범례 ── */}
             <div className="flex flex-col gap-3">
               {chartData.map((entry, index) => {
-                const pct =
-                  total > 0
-                    ? ((entry.value / total) * 100).toFixed(1)
-                    : '0.0';
+                const pct = fmtPercent(entry.percent);
                 const color = getCategoryColor(entry.name, index);
                 const emoji = CATEGORY_EMOJI[entry.name] ?? (isExpense ? '📦' : '💰');
                 const barWidth =
-                  total > 0 ? (entry.value / chartData[0].value) * 100 : 0;
+                  chartData[0]?.value > 0 ? (entry.value / chartData[0].value) * 100 : 0;
 
                 return (
                   <div key={entry.name} className="flex items-center gap-3">
@@ -295,7 +320,7 @@ export default function ExpenseChart() {
                       className="text-xs font-bold flex-shrink-0 w-10 text-right"
                       style={{ color }}
                     >
-                      {pct}%
+                      {pct}
                     </span>
                   </div>
                 );

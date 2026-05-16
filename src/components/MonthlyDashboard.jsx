@@ -70,6 +70,15 @@ const getTxDate = (tx) => {
   return typeof raw === 'string' ? raw.slice(0, 10) : '';
 };
 
+const isTxInMonth = (tx, monthDate) => {
+  const date = getTxDate(tx);
+  if (!date) return false;
+
+  const year = monthDate.getFullYear();
+  const month = String(monthDate.getMonth() + 1).padStart(2, '0');
+  return date.startsWith(`${year}-${month}-`);
+};
+
 /** transaction 객체에서 메모 추출 */
 const getMemo = (tx) =>
   tx.description ?? tx.memo ?? '';
@@ -106,7 +115,7 @@ export default function MonthlyDashboard() {
     setLoading(true);
     setError(null);
     api
-      .get(`/api/transactions?year=${year}&month=${month}`)
+      .get('/api/transactions/monthly', { params: { year, month } })
       .then((res) => {
         console.log('[MonthlyDashboard] API 응답 원본:', res.data);
         const list = Array.isArray(res.data) ? res.data : [];
@@ -114,7 +123,7 @@ export default function MonthlyDashboard() {
           console.log('[MonthlyDashboard] 첫 번째 항목 키 목록:', Object.keys(list[0]));
           console.log('[MonthlyDashboard] 첫 번째 항목 값:', list[0]);
         }
-        setTransactions(list);
+        setTransactions(list.filter((tx) => isTxInMonth(tx, currentMonth)));
       })
       .catch((err) => {
         console.error('[MonthlyDashboard] 거래 내역 로딩 실패:', err);
@@ -160,10 +169,17 @@ export default function MonthlyDashboard() {
   const selectedItems = dailyMap[selectedKey]?.items ?? [];
 
   // ── 월 이동 ──
-  const prevMonth = () =>
-    setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
-  const nextMonth = () =>
-    setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  const moveMonth = (offset) => {
+    const next = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth() + offset,
+      1
+    );
+    setCurrentMonth(next);
+    setSelectedDate(next);
+  };
+  const prevMonth = () => moveMonth(-1);
+  const nextMonth = () => moveMonth(1);
 
   // ── 월 총계 ──
   const monthlyTotal = useMemo(() => {
