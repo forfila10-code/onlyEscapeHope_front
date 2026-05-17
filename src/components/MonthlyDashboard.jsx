@@ -12,6 +12,7 @@ import {
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import api from '../api/axiosInstance';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 // 카테고리 이모지 매핑
 const CATEGORY_EMOJI = {
@@ -92,6 +93,8 @@ const getType = (tx) => {
 
 export default function MonthlyDashboard() {
   const today = new Date();
+  // 선택된 워크스페이스 ID와 refetch 버전을 기준으로 월별 거래 목록을 다시 불러옵니다.
+  const { currentWorkspaceId, refreshVersion } = useWorkspace();
   const [currentMonth, setCurrentMonth] = useState(
     new Date(today.getFullYear(), today.getMonth(), 1)
   );
@@ -115,7 +118,8 @@ export default function MonthlyDashboard() {
     setLoading(true);
     setError(null);
     api
-      .get('/api/transactions/monthly', { params: { year, month } })
+      // year/month는 조회 월, workspaceId는 현재 선택된 공유방을 의미합니다.
+      .get('/api/transactions/monthly', { params: { year, month, workspaceId: currentWorkspaceId } })
       .then((res) => {
         console.log('[MonthlyDashboard] API 응답 원본:', res.data);
         const list = Array.isArray(res.data) ? res.data : [];
@@ -138,7 +142,7 @@ export default function MonthlyDashboard() {
         setTransactions([]);
       })
       .finally(() => setLoading(false));
-  }, [currentMonth]);
+  }, [currentMonth, currentWorkspaceId, refreshVersion]);
 
   // ── 날짜별 집계 맵 { "YYYY-MM-DD": { income, expense, items[] } } ──
   const dailyMap = useMemo(() => {

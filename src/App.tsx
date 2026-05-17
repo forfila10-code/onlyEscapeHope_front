@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import LoginPage from './pages/Login/LoginPage';
 import MainPage from './pages/Home/MainPage';
 import OAuthCallback from './pages/OAuth/OAuthCallback';
+// @ts-ignore
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
 
 function App() {
   return (
@@ -11,7 +13,14 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         
         {/* 로그인이 성공해서 이쪽으로 리다이렉트 되면 메인 화면이 뜹니다 */}
-        <Route path="/home" element={<MainPage />} />
+        <Route
+          path="/home"
+          element={
+            <WorkspaceProvider>
+              <MainPage />
+            </WorkspaceProvider>
+          }
+        />
 
         <Route path="/oauth/callback" element={<OAuthCallback />} />
 

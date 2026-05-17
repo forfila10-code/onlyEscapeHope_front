@@ -1,5 +1,3 @@
-import React from 'react';
-
 function LoginPage() {
   
   // 💡 핵심! 카카오 로그인 버튼을 누르면 백엔드 주소로 이동시킵니다.

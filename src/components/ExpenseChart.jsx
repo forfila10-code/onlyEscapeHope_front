@@ -7,6 +7,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import api from '../api/axiosInstance';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 // ── 카테고리별 색상 ──────────────────────────────────────
 const CATEGORY_COLOR = {
@@ -82,6 +83,8 @@ const CustomTooltip = ({ active, payload }) => {
 
 export default function ExpenseChart() {
   const today = new Date();
+  // 선택된 워크스페이스 ID와 refetch 버전을 기준으로 통계 데이터를 다시 불러옵니다.
+  const { currentWorkspaceId, refreshVersion } = useWorkspace();
 
   // ── year / month를 숫자로 분리 → useEffect 의존성 비교 확실 ──
   const [year, setYear]   = useState(today.getFullYear());
@@ -115,7 +118,10 @@ export default function ExpenseChart() {
     console.log(`[ExpenseChart] API 호출: year=${year}, month=${month}`);
 
     api
-      .get(`/api/transactions/statistics?year=${year}&month=${month}`)
+      .get('/api/transactions/statistics', {
+        // year/month는 조회 기간, workspaceId는 현재 선택된 공유방을 의미합니다.
+        params: { year, month, workspaceId: currentWorkspaceId },
+      })
       .then((res) => {
         console.log('[ExpenseChart] 응답:', res.data);
         setSummary(res.data ?? null);
@@ -126,7 +132,7 @@ export default function ExpenseChart() {
         setError(status === 401 || status === 403 ? 'auth' : 'server');
       })
       .finally(() => setLoading(false));
-  }, [year, month]); // ← 숫자 비교로 확실한 재실행
+  }, [year, month, currentWorkspaceId, refreshVersion]); // ← 숫자 비교로 확실한 재실행
 
   // ── categoryBreakdown → 차트 데이터 (viewType 필터) ──
   // 응답: { categoryBreakdown: [{category, type, totalAmount}], totalExpense, totalIncome, netAmount }

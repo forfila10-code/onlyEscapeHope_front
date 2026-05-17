@@ -1,20 +1,85 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
+// @ts-ignore
+import api from '../../api/axiosInstance';
 // @ts-ignore
 import TransactionModal from '../../components/TransactionModal';
 // @ts-ignore
 import MonthlyDashboard from '../../components/MonthlyDashboard';
 // @ts-ignore
 import ExpenseChart from '../../components/ExpenseChart';
+// @ts-ignore
+import WorkspaceSwitcher from '../../components/WorkspaceSwitcher';
+// @ts-ignore
+import { useWorkspace } from '../../contexts/WorkspaceContext';
 
-const RECENT_ITEMS = [
-  { id: 1, emoji: '🍽️', emojiColor: 'bg-orange-100', title: '스타벅스 강남점', sub: '식비 • 오늘 13:00', amount: '-9,000원', isExpense: true },
-  { id: 2, emoji: '🏠', emojiColor: 'bg-green-100', title: '이마트 장보기', sub: '생활 • 어제 18:30', amount: '-85,000원', isExpense: true },
-  { id: 3, emoji: '💰', emojiColor: 'bg-blue-100', title: '4월 월급', sub: '수입 • 4/1 09:00', amount: '+5,000,000원', isExpense: false },
-];
+const CATEGORY_META: Record<string, { emoji: string; emojiColor: string }> = {
+  식비: { emoji: '🍽️', emojiColor: 'bg-orange-100' },
+  카페: { emoji: '☕', emojiColor: 'bg-yellow-100' },
+  교통: { emoji: '🚌', emojiColor: 'bg-sky-100' },
+  쇼핑: { emoji: '🛍️', emojiColor: 'bg-pink-100' },
+  생활: { emoji: '🏠', emojiColor: 'bg-green-100' },
+  의료: { emoji: '💊', emojiColor: 'bg-red-100' },
+  문화: { emoji: '🎬', emojiColor: 'bg-purple-100' },
+  운동: { emoji: '💪', emojiColor: 'bg-emerald-100' },
+  기타: { emoji: '📦', emojiColor: 'bg-gray-100' },
+  급여: { emoji: '💰', emojiColor: 'bg-blue-100' },
+  용돈: { emoji: '💵', emojiColor: 'bg-blue-100' },
+  이자: { emoji: '🏦', emojiColor: 'bg-blue-100' },
+  수입: { emoji: '💰', emojiColor: 'bg-blue-100' },
+};
+
+const fmt = (value: number | null | undefined) =>
+  Math.abs(Number(value ?? 0)).toLocaleString('ko-KR');
+
+const isIncome = (type: string | undefined) => (type ?? '').toUpperCase() === 'INCOME';
+
+const getCategoryMeta = (category: string | undefined, type: string | undefined) =>
+  CATEGORY_META[category ?? ''] ?? (isIncome(type) ? CATEGORY_META.수입 : CATEGORY_META.기타);
 
 function MainPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
+  const { currentWorkspaceId, refreshVersion } = useWorkspace();
+  const [homeSummary, setHomeSummary] = useState<any>(null);
+  const [homeLoading, setHomeLoading] = useState(false);
+  const [homeError, setHomeError] = useState(false);
+
+  const today = new Date();
+  const targetYear = today.getFullYear();
+  const targetMonth = today.getMonth() + 1;
+
+  // 선택된 워크스페이스가 바뀌거나 거래 저장 refresh 신호가 오면 메인 홈 요약을 다시 조회합니다.
+  useEffect(() => {
+    if (!currentWorkspaceId) return;
+
+    setHomeLoading(true);
+    setHomeError(false);
+
+    api
+      .get('/api/transactions/home-summary', {
+        params: {
+          year: targetYear,
+          month: targetMonth,
+          workspaceId: currentWorkspaceId,
+        },
+      })
+      .then((res: any) => {
+        setHomeSummary(res.data ?? null);
+      })
+      .catch((error: unknown) => {
+        console.error('[MainPage] 홈 요약 로딩 실패:', error);
+        setHomeError(true);
+        setHomeSummary(null);
+      })
+      .finally(() => setHomeLoading(false));
+  }, [currentWorkspaceId, refreshVersion, targetYear, targetMonth]);
+
+  const totalIncome = Number(homeSummary?.totalIncome ?? 0);
+  const totalExpense = Number(homeSummary?.totalExpense ?? 0);
+  const netAmount = Number(homeSummary?.netAmount ?? totalIncome - totalExpense);
+  const recentTransactions = Array.isArray(homeSummary?.recentTransactions)
+    ? homeSummary.recentTransactions
+    : [];
 
   return (
     <div className="flex flex-col min-h-screen bg-[#f2f3f7] font-sans">
@@ -22,14 +87,14 @@ function MainPage() {
       {/* ── 상단 앱바 ── */}
       <header className="bg-white px-5 pt-12 pb-4 flex items-center justify-between sticky top-0 z-10 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
         <div>
-          <p className="text-xs text-gray-400 font-medium">2025년 4월</p>
+          <p className="text-xs text-gray-400 font-medium">
+            {targetYear}년 {targetMonth}월
+          </p>
           <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
             PocketFree
           </h1>
         </div>
-        <button className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center text-base active:scale-90 transition-transform">
-          🔔
-        </button>
+        <WorkspaceSwitcher />
       </header>
 
       {/* ── 스크롤 가능한 메인 콘텐츠 ── */}
@@ -52,22 +117,32 @@ function MainPage() {
 
           <p className="text-gray-400 text-xs font-medium mb-1 relative z-10">이번 달 잔액</p>
           <p className="text-white text-4xl font-extrabold tracking-tight mb-5 relative z-10">
-            1,450,000<span className="text-xl font-semibold ml-1 text-gray-300">원</span>
+            {homeLoading ? '...' : fmt(netAmount)}
+            <span className="text-xl font-semibold ml-1 text-gray-300">원</span>
           </p>
 
           {/* 수입 / 지출 요약 */}
           <div className="flex gap-5 relative z-10">
             <div>
               <p className="text-gray-500 text-xs mb-1">수입</p>
-              <p className="text-blue-400 text-base font-bold">+5,000,000</p>
+              <p className="text-blue-400 text-base font-bold">
+                +{homeLoading ? '...' : fmt(totalIncome)}
+              </p>
             </div>
             <div className="w-px bg-white/10" />
             <div>
               <p className="text-gray-500 text-xs mb-1">지출</p>
-              <p className="text-red-400 text-base font-bold">-3,550,000</p>
+              <p className="text-red-400 text-base font-bold">
+                -{homeLoading ? '...' : fmt(totalExpense)}
+              </p>
             </div>
           </div>
         </div>
+        {homeError && (
+          <p className="text-xs text-red-300 font-semibold mt-3 relative z-10">
+            메인 데이터를 가져오지 못했습니다.
+          </p>
+        )}
 
         {/* 빠른 분석 — 가로 스크롤 칩 */}
         <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
@@ -94,33 +169,54 @@ function MainPage() {
             </button>
           </div>
 
-          <div className="divide-y divide-gray-50">
-            {RECENT_ITEMS.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 px-5 py-4 active:bg-gray-50 transition-colors">
-                {/* 카테고리 아이콘 */}
-                <div
-                  className={`w-11 h-11 ${item.emojiColor} rounded-2xl flex items-center justify-center text-xl flex-shrink-0`}
-                >
-                  {item.emoji}
-                </div>
+          {homeLoading ? (
+            <div className="px-5 py-8 text-center text-sm text-gray-400 font-medium">
+              최근 내역을 불러오는 중입니다.
+            </div>
+          ) : recentTransactions.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-gray-400 font-medium">
+              최근 내역이 없습니다.
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {recentTransactions.map((tx: any) => {
+                const meta = getCategoryMeta(tx.category, tx.type);
+                const income = isIncome(tx.type);
+                const paidByText = tx.paidByNickname ? ` • ${tx.paidByNickname} 결제` : '';
 
-                {/* 내용 */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{item.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{item.sub}</p>
-                </div>
+                return (
+                  <div key={tx.id} className="flex items-center gap-3 px-5 py-4 active:bg-gray-50 transition-colors">
+                    {/* 카테고리 아이콘 */}
+                    <div
+                      className={`w-11 h-11 ${meta.emojiColor} rounded-2xl flex items-center justify-center text-xl flex-shrink-0`}
+                    >
+                      {meta.emoji}
+                    </div>
 
-                {/* 금액 */}
-                <span
-                  className={`text-sm font-bold flex-shrink-0 ${
-                    item.isExpense ? 'text-red-500' : 'text-blue-500'
-                  }`}
-                >
-                  {item.amount}
-                </span>
-              </div>
-            ))}
-          </div>
+                    {/* 내용 */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {tx.category ?? (income ? '수입' : '기타')}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">
+                        {(tx.memo || tx.date || '메모 없음')}{paidByText}
+                      </p>
+                    </div>
+
+                    {/* 금액 */}
+                    <span
+                      className={`text-sm font-bold flex-shrink-0 ${
+                        income ? 'text-blue-500' : 'text-red-500'
+                      }`}
+                    >
+                      {income ? '+' : '-'}
+                      {fmt(tx.amount)}원
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* 더보기 버튼 */}
           <button className="w-full py-4 text-xs text-gray-400 font-medium active:bg-gray-50 transition-colors border-t border-gray-50">
@@ -135,7 +231,7 @@ function MainPage() {
       {/* ── 하단 탭 바 ── */}
       <nav className="fixed bottom-0 w-full max-w-[430px] bg-white border-t border-gray-100 flex items-end justify-around px-2 pt-3 pb-6 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.04)]">
 
-        {(['home', 'stats'] as const).map((tab, i) => {
+        {(['home', 'stats'] as const).map((tab) => {
           const icons = { home: '🏠', stats: '📊' };
           const labels = { home: '홈', stats: '통계' };
           return (
