@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 // @ts-ignore
 import api from '../../api/axiosInstance';
 // @ts-ignore
@@ -39,7 +40,8 @@ const getCategoryMeta = (category: string | undefined, type: string | undefined)
 function MainPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
-  const { currentWorkspaceId, refreshVersion } = useWorkspace();
+  const navigate = useNavigate();
+  const { currentWorkspaceId, currentWorkspace, refreshVersion } = useWorkspace();
   const [homeSummary, setHomeSummary] = useState<any>(null);
   const [homeLoading, setHomeLoading] = useState(false);
   const [homeError, setHomeError] = useState(false);
@@ -85,7 +87,7 @@ function MainPage() {
     <div className="flex flex-col min-h-screen bg-[#f2f3f7] font-sans">
 
       {/* ── 상단 앱바 ── */}
-      <header className="bg-white px-5 pt-12 pb-4 flex items-center justify-between sticky top-0 z-10 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
+      <header className="bg-white px-5 pt-12 pb-4 flex items-center justify-between sticky top-0 z-40 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
         <div>
           <p className="text-xs text-gray-400 font-medium">
             {targetYear}년 {targetMonth}월
@@ -106,8 +108,55 @@ function MainPage() {
         {/* ── 통계 탭: 카테고리별 지출 차트 ── */}
         {activeTab === 'stats' && <ExpenseChart />}
 
+        {/* ── 설정 탭 ── */}
+        {activeTab === 'settings' && (
+          <div className="space-y-2">
+
+            {/* 현재 워크스페이스 정보 */}
+            <p className="px-1 pt-2 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
+              워크스페이스
+            </p>
+            <div className="bg-white rounded-3xl overflow-hidden shadow-sm">
+              <button
+                type="button"
+                onClick={() => navigate('/workspace/manage')}
+                className="w-full flex items-center gap-4 px-5 py-4 active:bg-gray-50 transition-colors"
+              >
+                <div className="w-11 h-11 bg-blue-50 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                  🗂️
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">내 워크스페이스 관리</p>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">
+                    {currentWorkspace?.name ?? '워크스페이스'}
+                  </p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300 flex-shrink-0">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 앱 정보 */}
+            <p className="px-1 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
+              앱 정보
+            </p>
+            <div className="bg-white rounded-3xl overflow-hidden shadow-sm divide-y divide-gray-50">
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-sm font-medium text-gray-700">버전</span>
+                <span className="text-sm text-gray-400">1.0.0</span>
+              </div>
+              <div className="flex items-center justify-between px-5 py-4">
+                <span className="text-sm font-medium text-gray-700">앱 이름</span>
+                <span className="text-sm text-gray-400">PocketFree</span>
+              </div>
+            </div>
+
+          </div>
+        )}
+
         {/* 홈 탭 콘텐츠 */}
-        {activeTab !== 'calendar' && activeTab !== 'stats' && <>
+        {activeTab !== 'calendar' && activeTab !== 'stats' && activeTab !== 'settings' && <>
 
         {/* 잔액 카드 — 다크 그라데이션 */}
         <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 rounded-3xl p-6 relative overflow-hidden">

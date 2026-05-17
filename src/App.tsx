@@ -4,6 +4,10 @@ import MainPage from './pages/Home/MainPage';
 import OAuthCallback from './pages/OAuth/OAuthCallback';
 // @ts-ignore
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
+// @ts-ignore
+import WorkspaceManagePage from './pages/Workspace/WorkspaceManagePage';
+// @ts-ignore
+import WorkspaceJoinPage from './pages/Workspace/WorkspaceJoinPage';
 
 function App() {
   return (
@@ -21,6 +25,19 @@ function App() {
             </WorkspaceProvider>
           }
         />
+
+        {/* 워크스페이스 관리 페이지 */}
+        <Route
+          path="/workspace/manage"
+          element={
+            <WorkspaceProvider>
+              <WorkspaceManagePage />
+            </WorkspaceProvider>
+          }
+        />
+
+        {/* 워크스페이스 초대 링크 가입 페이지 (인증 불필요, 페이지 자체에서 처리) */}
+        <Route path="/workspace/join/:token" element={<WorkspaceJoinPage />} />
 
         <Route path="/oauth/callback" element={<OAuthCallback />} />
 

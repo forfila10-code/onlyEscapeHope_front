@@ -116,6 +116,7 @@ export function WorkspaceProvider({ children }) {
         loading,
         selectWorkspace,
         createWorkspace,
+        loadWorkspaces,
         refreshWorkspaceData,
         refreshVersion,
       }}
