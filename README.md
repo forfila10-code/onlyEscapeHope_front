@@ -1,73 +1,39 @@
-# React + TypeScript + Vite
+# PocketFree
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+부부·가족 가계부. Next.js App Router + Supabase (Auth/Kakao, Postgres RLS).
 
-Currently, two official plugins are available:
+## 준비
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. [Supabase](https://supabase.com/dashboard) 프로젝트 생성
+2. SQL Editor에서 아래를 **순서대로** 실행
+   - `supabase/migrations/001_init.sql`
+   - `supabase/migrations/002_ensure_workspace.sql` (기존 계정 백필, 없으면 홈이 비어 보일 수 있음)
+   - `supabase/migrations/003_create_workspace.sql` (워크스페이스 생성 RLS)
+   - `supabase/migrations/004_product_features.sql` (월 예산, 반복 거래, 프로필 RLS)
+3. `supabase/verify.sql` 로 함수·테이블이 있는지 확인
+4. Kakao 로그인: `supabase/README.md` 참고
+5. 초대·정산 2인 확인: `supabase/SMOKE.md`
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cp .env.example .env.local
+# NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 입력
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+브라우저에서 http://localhost:3000
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+anon key는 `eyJ` 로 시작하는 JWT여야 합니다. 프로젝트 ref 문자열을 넣으면 로그인 루프가 납니다.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 주요 기능
+
+- 카카오 로그인, 개인/공유 워크스페이스, 초대 링크
+- 거래 추가·수정·삭제, 홈 기간 요약, 달력, 카테고리 통계
+- 카테고리 월 예산, 반복 거래(앱 오픈 시 해당 월 자동 생성)
+- 기간별 CSV 내보내기, 닉네임 수정, 1/N 정산(선택한 달)
+
+프론트만으로 동작합니다. Spring Boot는 필요 없습니다.
+
+## 탭 URL
+
+하단 탭은 `/?tab=home|stats|calendar|settings` 로 유지됩니다.
