@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { createClient } from '../../utils/supabase/client';
 
 function LoginForm() {
@@ -24,13 +25,16 @@ function LoginForm() {
               : '';
 
   const handleKakaoLogin = async () => {
-    // 카카오 개인 앱은 account_email 동의 항목을 켤 수 없음.
-    // Supabase Kakao 설정에서 "Allow users without an email" 도 반드시 켜야 함.
+    // 앱(Capacitor) WebView는 origin 이 localhost 로 잡힐 수 있어 배포 URL을 고정합니다.
+    const origin = Capacitor.isNativePlatform()
+      ? 'https://only-escape-hope-front.vercel.app'
+      : window.location.origin;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
         scopes: 'profile_nickname',
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
 
