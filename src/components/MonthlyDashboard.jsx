@@ -91,7 +91,7 @@ const getType = (tx) => {
   return 'EXPENSE';
 };
 
-export default function MonthlyDashboard() {
+export default function MonthlyDashboard({ onSelectTransaction }) {
   const today = new Date();
   // 선택된 워크스페이스 ID와 refetch 버전을 기준으로 월별 거래 목록을 다시 불러옵니다.
   const { currentWorkspaceId, refreshVersion } = useWorkspace();
@@ -392,9 +392,11 @@ export default function MonthlyDashboard() {
               const isExpense = type === 'EXPENSE';
 
               return (
-                <div
+                <button
                   key={tx.id ?? idx}
-                  className="flex items-center gap-3 px-5 py-4 active:bg-gray-50 transition-colors"
+                  type="button"
+                  onClick={() => onSelectTransaction?.(tx)}
+                  className="w-full flex items-center gap-3 px-5 py-4 active:bg-gray-50 transition-colors text-left"
                 >
                   {/* 카테고리 아이콘 */}
                   <div
@@ -424,7 +426,7 @@ export default function MonthlyDashboard() {
                     {isExpense ? '-' : '+'}
                     {fmt(tx.amount)}원
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>

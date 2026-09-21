@@ -11,6 +11,8 @@ import ExpenseChart from '../../components/ExpenseChart';
 // @ts-ignore
 import WorkspaceSwitcher from '../../components/WorkspaceSwitcher';
 // @ts-ignore
+import SettlementCard from '../../components/SettlementCard';
+// @ts-ignore
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 const CATEGORY_META: Record<string, { emoji: string; emojiColor: string }> = {
@@ -39,9 +41,11 @@ const getCategoryMeta = (category: string | undefined, type: string | undefined)
 
 function MainPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTx, setEditingTx] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('home');
+  const [period, setPeriod] = useState('THIS_MONTH');
   const navigate = useNavigate();
-  const { currentWorkspaceId, currentWorkspace, refreshVersion } = useWorkspace();
+  const { currentWorkspaceId, currentWorkspace, members, refreshVersion } = useWorkspace();
   const [homeSummary, setHomeSummary] = useState<any>(null);
   const [homeLoading, setHomeLoading] = useState(false);
   const [homeError, setHomeError] = useState(false);
@@ -49,8 +53,15 @@ function MainPage() {
   const today = new Date();
   const targetYear = today.getFullYear();
   const targetMonth = today.getMonth() + 1;
+  const PERIODS = [
+    { id: 'THIS_MONTH', label: '이번 달' },
+    { id: 'LAST_MONTH', label: '지난 달' },
+    { id: 'LAST_3_MONTHS', label: '3개월' },
+    { id: 'THIS_YEAR', label: '올해' },
+  ];
+  const periodLabel = PERIODS.find((item) => item.id === period)?.label ?? '이번 달';
 
-  // 선택된 워크스페이스가 바뀌거나 거래 저장 refresh 신호가 오면 메인 홈 요약을 다시 조회합니다.
+  // 선택된 워크스페이스/기간이 바뀌거나 거래 저장 refresh 신호가 오면 메인 홈 요약을 다시 조회합니다.
   useEffect(() => {
     if (!currentWorkspaceId) return;
 
@@ -60,8 +71,7 @@ function MainPage() {
     api
       .get('/api/transactions/home-summary', {
         params: {
-          year: targetYear,
-          month: targetMonth,
+          period,
           workspaceId: currentWorkspaceId,
         },
       })
@@ -74,7 +84,7 @@ function MainPage() {
         setHomeSummary(null);
       })
       .finally(() => setHomeLoading(false));
-  }, [currentWorkspaceId, refreshVersion, targetYear, targetMonth]);
+  }, [currentWorkspaceId, refreshVersion, period]);
 
   const totalIncome = Number(homeSummary?.totalIncome ?? 0);
   const totalExpense = Number(homeSummary?.totalExpense ?? 0);
@@ -90,7 +100,7 @@ function MainPage() {
       <header className="bg-white px-5 pt-12 pb-4 flex items-center justify-between sticky top-0 z-40 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
         <div>
           <p className="text-xs text-gray-400 font-medium">
-            {targetYear}년 {targetMonth}월
+            {periodLabel}
           </p>
           <h1 className="text-xl font-extrabold text-gray-900 tracking-tight leading-tight">
             PocketFree
@@ -103,7 +113,12 @@ function MainPage() {
       <main className="flex-1 overflow-y-auto px-4 pt-4 pb-32 space-y-3">
 
         {/* ── 달력 탭: 월간 대시보드 ── */}
-        {activeTab === 'calendar' && <MonthlyDashboard />}
+        {activeTab === 'calendar' && (
+          <MonthlyDashboard onSelectTransaction={(tx: any) => {
+            setEditingTx(tx);
+            setIsModalOpen(true);
+          }} />
+        )}
 
         {/* ── 통계 탭: 카테고리별 지출 차트 ── */}
         {activeTab === 'stats' && <ExpenseChart />}
@@ -152,6 +167,39 @@ function MainPage() {
               </div>
             </div>
 
+            {members.length > 1 && (
+              <>
+                <p className="px-1 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                  정산
+                </p>
+                <SettlementCard year={targetYear} month={targetMonth} />
+              </>
+            )}
+
+            <p className="px-1 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
+              계정
+            </p>
+            <div className="bg-white rounded-3xl overflow-hidden shadow-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem('accessToken');
+                  localStorage.removeItem('currentWorkspaceId');
+                  localStorage.removeItem('pendingRedirect');
+                  navigate('/login', { replace: true });
+                }}
+                className="w-full flex items-center gap-4 px-5 py-4 active:bg-gray-50 transition-colors"
+              >
+                <div className="w-11 h-11 bg-red-50 rounded-2xl flex items-center justify-center text-xl flex-shrink-0">
+                  🚪
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-semibold text-gray-900">로그아웃</p>
+                  <p className="text-xs text-gray-400 mt-0.5">이 기기에서 로그인 정보를 지웁니다</p>
+                </div>
+              </button>
+            </div>
+
           </div>
         )}
 
@@ -164,7 +212,7 @@ function MainPage() {
           <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/5 rounded-full" />
           <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-white/5 rounded-full" />
 
-          <p className="text-gray-400 text-xs font-medium mb-1 relative z-10">이번 달 잔액</p>
+          <p className="text-gray-400 text-xs font-medium mb-1 relative z-10">{periodLabel} 잔액</p>
           <p className="text-white text-4xl font-extrabold tracking-tight mb-5 relative z-10">
             {homeLoading ? '...' : fmt(netAmount)}
             <span className="text-xl font-semibold ml-1 text-gray-300">원</span>
@@ -195,16 +243,17 @@ function MainPage() {
 
         {/* 빠른 분석 — 가로 스크롤 칩 */}
         <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
-          {['이번 달', '지난 달', '3개월', '올해'].map((label, i) => (
+          {PERIODS.map((item) => (
             <button
-              key={label}
+              key={item.id}
+              onClick={() => setPeriod(item.id)}
               className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all active:scale-95 ${
-                i === 0
+                period === item.id
                   ? 'bg-gray-900 text-white'
                   : 'bg-white text-gray-500 border border-gray-200'
               }`}
             >
-              {label}
+              {item.label}
             </button>
           ))}
         </div>
@@ -213,7 +262,11 @@ function MainPage() {
         <div className="bg-white rounded-3xl overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <h3 className="text-sm font-bold text-gray-900">최근 내역</h3>
-            <button className="text-xs text-blue-500 font-semibold active:opacity-50">
+            <button
+              type="button"
+              onClick={() => navigate('/transactions')}
+              className="text-xs text-blue-500 font-semibold active:opacity-50"
+            >
               전체보기
             </button>
           </div>
@@ -234,7 +287,15 @@ function MainPage() {
                 const paidByText = tx.paidByNickname ? ` • ${tx.paidByNickname} 결제` : '';
 
                 return (
-                  <div key={tx.id} className="flex items-center gap-3 px-5 py-4 active:bg-gray-50 transition-colors">
+                  <button
+                    key={tx.id}
+                    type="button"
+                    onClick={() => {
+                      setEditingTx(tx);
+                      setIsModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-5 py-4 active:bg-gray-50 transition-colors text-left"
+                  >
                     {/* 카테고리 아이콘 */}
                     <div
                       className={`w-11 h-11 ${meta.emojiColor} rounded-2xl flex items-center justify-center text-xl flex-shrink-0`}
@@ -261,14 +322,18 @@ function MainPage() {
                       {income ? '+' : '-'}
                       {fmt(tx.amount)}원
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           )}
 
           {/* 더보기 버튼 */}
-          <button className="w-full py-4 text-xs text-gray-400 font-medium active:bg-gray-50 transition-colors border-t border-gray-50">
+          <button
+            type="button"
+            onClick={() => navigate('/transactions')}
+            className="w-full py-4 text-xs text-gray-400 font-medium active:bg-gray-50 transition-colors border-t border-gray-50"
+          >
             내역 더 보기
           </button>
         </div>
@@ -305,7 +370,10 @@ function MainPage() {
 
         {/* 중앙 + 버튼 */}
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditingTx(null);
+            setIsModalOpen(true);
+          }}
           className="-mt-7 flex flex-col items-center active:scale-90 transition-transform"
         >
           <div className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-200">
@@ -338,7 +406,14 @@ function MainPage() {
 
       </nav>
 
-      <TransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <TransactionModal
+        isOpen={isModalOpen}
+        transaction={editingTx}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingTx(null);
+        }}
+      />
     </div>
   );
 }

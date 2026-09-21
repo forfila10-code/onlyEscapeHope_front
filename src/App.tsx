@@ -8,40 +8,49 @@ import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import WorkspaceManagePage from './pages/Workspace/WorkspaceManagePage';
 // @ts-ignore
 import WorkspaceJoinPage from './pages/Workspace/WorkspaceJoinPage';
+// @ts-ignore
+import TransactionListPage from './pages/Home/TransactionListPage';
+import RequireAuth from './components/RequireAuth';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 기본 주소(/)로 접속하면 로그인 페이지가 뜹니다 */}
         <Route path="/" element={<LoginPage />} />
-        
-        {/* 로그인이 성공해서 이쪽으로 리다이렉트 되면 메인 화면이 뜹니다 */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/oauth/callback" element={<OAuthCallback />} />
+        <Route path="/workspace/join/:token" element={<WorkspaceJoinPage />} />
+
         <Route
           path="/home"
           element={
-            <WorkspaceProvider>
-              <MainPage />
-            </WorkspaceProvider>
+            <RequireAuth>
+              <WorkspaceProvider>
+                <MainPage />
+              </WorkspaceProvider>
+            </RequireAuth>
           }
         />
-
-        {/* 워크스페이스 관리 페이지 */}
         <Route
           path="/workspace/manage"
           element={
-            <WorkspaceProvider>
-              <WorkspaceManagePage />
-            </WorkspaceProvider>
+            <RequireAuth>
+              <WorkspaceProvider>
+                <WorkspaceManagePage />
+              </WorkspaceProvider>
+            </RequireAuth>
           }
         />
-
-        {/* 워크스페이스 초대 링크 가입 페이지 (인증 불필요, 페이지 자체에서 처리) */}
-        <Route path="/workspace/join/:token" element={<WorkspaceJoinPage />} />
-
-        <Route path="/oauth/callback" element={<OAuthCallback />} />
-
-        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/transactions"
+          element={
+            <RequireAuth>
+              <WorkspaceProvider>
+                <TransactionListPage />
+              </WorkspaceProvider>
+            </RequireAuth>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

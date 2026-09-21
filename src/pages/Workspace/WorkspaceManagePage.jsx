@@ -50,7 +50,7 @@ function SectionLabel({ children }) {
 
 export default function WorkspaceManagePage() {
   const navigate = useNavigate();
-  const { currentWorkspace, currentWorkspaceId, members, loadWorkspaces } = useWorkspace();
+  const { currentWorkspace, currentWorkspaceId, members, currentUser, loadWorkspaces, refreshWorkspaceData } = useWorkspace();
 
   const [name, setName] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
@@ -61,6 +61,13 @@ export default function WorkspaceManagePage() {
 
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [kickingUserId, setKickingUserId] = useState(null);
+
+  const myUserId = currentUser?.id;
+  const isOwner = currentWorkspace?.role === 'OWNER';
+  const ownerCount = members.filter((member) => member.role === 'OWNER').length;
+  const canLeave = members.length > 1 && !(isOwner && ownerCount <= 1);
 
   useEffect(() => {
     if (currentWorkspace?.name) {
@@ -118,12 +125,38 @@ export default function WorkspaceManagePage() {
     try {
       await api.delete(`/api/workspaces/${currentWorkspaceId}`);
       localStorage.removeItem('currentWorkspaceId');
-      // navigate 대신 하드 리다이렉트로 WorkspaceProvider 상태를 완전히 초기화합니다.
       window.location.replace('/home');
     } catch {
       showToast('워크스페이스 삭제에 실패했습니다.');
       setDeleting(false);
       setConfirmDelete(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    if (!myUserId) return;
+    setLeaving(true);
+    try {
+      await api.delete(`/api/workspaces/${currentWorkspaceId}/members/${myUserId}`);
+      localStorage.removeItem('currentWorkspaceId');
+      window.location.replace('/home');
+    } catch (err) {
+      showToast(err?.response?.data?.error || '나가기에 실패했습니다.');
+      setLeaving(false);
+    }
+  };
+
+  const handleKick = async (targetUserId) => {
+    setKickingUserId(targetUserId);
+    try {
+      await api.delete(`/api/workspaces/${currentWorkspaceId}/members/${targetUserId}`);
+      showToast('멤버를 내보냈습니다.');
+      if (loadWorkspaces) await loadWorkspaces();
+      refreshWorkspaceData();
+    } catch (err) {
+      showToast(err?.response?.data?.error || '멤버 내보내기에 실패했습니다.');
+    } finally {
+      setKickingUserId(null);
     }
   };
 
@@ -187,14 +220,16 @@ export default function WorkspaceManagePage() {
             <span className="text-sm font-bold text-gray-700">
               참여 중인 멤버 <span className="text-blue-500">{members.length}</span>
             </span>
-            <button
-              type="button"
-              onClick={handleInvite}
-              className="flex items-center gap-1.5 bg-blue-50 text-blue-600 text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-transform"
-            >
-              <span>+</span>
-              <span>멤버 초대하기</span>
-            </button>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={handleInvite}
+                className="flex items-center gap-1.5 bg-blue-50 text-blue-600 text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-transform"
+              >
+                <span>+</span>
+                <span>멤버 초대하기</span>
+              </button>
+            )}
           </div>
 
           {/* 멤버 리스트 */}
@@ -204,9 +239,10 @@ export default function WorkspaceManagePage() {
             ) : (
               members.map((member, index) => {
                 const initials = (member.nickname ?? member.name ?? '?').slice(0, 2);
-                const isMe = index === 0;
+                const isMe = myUserId != null && String(member.userId) === String(myUserId);
+                const canKick = isOwner && !isMe && member.role !== 'OWNER';
                 return (
-                  <div key={member.id ?? index} className="flex items-center gap-4 px-5 py-4">
+                  <div key={member.userId ?? index} className="flex items-center gap-4 px-5 py-4">
                     <div
                       className={`w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-bold flex-shrink-0 ${avatarColor(index)}`}
                     >
@@ -225,9 +261,20 @@ export default function WorkspaceManagePage() {
                         <p className="text-xs text-gray-400 mt-0.5 truncate">{member.email}</p>
                       )}
                     </div>
-                    <span className="text-xs text-gray-300 font-medium flex-shrink-0">
-                      {member.role === 'OWNER' ? '관리자' : '멤버'}
-                    </span>
+                    {canKick ? (
+                      <button
+                        type="button"
+                        onClick={() => handleKick(member.userId)}
+                        disabled={kickingUserId === member.userId}
+                        className="text-xs font-bold text-red-400 px-2 py-1 rounded-lg active:bg-red-50 disabled:opacity-50"
+                      >
+                        {kickingUserId === member.userId ? '처리 중' : '내보내기'}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-300 font-medium flex-shrink-0">
+                        {member.role === 'OWNER' ? '관리자' : '멤버'}
+                      </span>
+                    )}
                   </div>
                 );
               })
@@ -238,7 +285,21 @@ export default function WorkspaceManagePage() {
         {/* 위험 구역 */}
         <SectionLabel>위험 구역</SectionLabel>
         <SectionCard>
-          {!confirmDelete ? (
+          {canLeave && (
+            <button
+              type="button"
+              onClick={handleLeave}
+              disabled={leaving}
+              className="w-full px-5 py-4 flex items-center gap-3 active:bg-orange-50 transition-colors border-b border-gray-50 disabled:opacity-60"
+            >
+              <span className="text-xl">👋</span>
+              <span className="text-sm font-semibold text-orange-500">
+                {leaving ? '나가는 중…' : '이 워크스페이스 나가기'}
+              </span>
+            </button>
+          )}
+          {isOwner && (
+            !confirmDelete ? (
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
@@ -271,6 +332,7 @@ export default function WorkspaceManagePage() {
                 </button>
               </div>
             </div>
+          )
           )}
         </SectionCard>
 

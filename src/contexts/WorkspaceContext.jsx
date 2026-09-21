@@ -19,6 +19,7 @@ export function WorkspaceProvider({ children }) {
 
   // 현재 워크스페이스의 멤버 목록. 거래 등록 시 결제자 드롭다운에 사용합니다.
   const [members, setMembers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
 
   // 거래 저장 후 달력/통계 컴포넌트가 같은 워크스페이스 데이터를 다시 조회하도록 올리는 버전 값
@@ -62,6 +63,19 @@ export function WorkspaceProvider({ children }) {
     });
   }, [loadWorkspaces]);
 
+  // 설정/멤버 화면에서 "나"를 구분하기 위해 현재 로그인 유저를 불러옵니다.
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+    api
+      .get('/api/me')
+      .then((res) => setCurrentUser(res.data ?? null))
+      .catch((error) => {
+        console.error('[Workspace] 내 정보 로딩 실패:', error);
+        setCurrentUser(null);
+      });
+  }, []);
+
   // 선택된 워크스페이스가 바뀔 때마다 결제자 선택에 필요한 멤버 목록을 다시 불러옵니다.
   useEffect(() => {
     if (!currentWorkspaceId) {
@@ -76,7 +90,7 @@ export function WorkspaceProvider({ children }) {
         console.error('[Workspace] 멤버 로딩 실패:', error);
         setMembers([]);
       });
-  }, [currentWorkspaceId]);
+  }, [currentWorkspaceId, refreshVersion]);
 
   /**
    * 사용자가 드롭다운에서 선택한 워크스페이스 ID를 전역 상태와 localStorage에 저장합니다.
@@ -113,6 +127,7 @@ export function WorkspaceProvider({ children }) {
         currentWorkspace,
         currentWorkspaceId: currentWorkspace?.id ?? null,
         members,
+        currentUser,
         loading,
         selectWorkspace,
         createWorkspace,
