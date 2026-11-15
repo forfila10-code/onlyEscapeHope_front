@@ -21,16 +21,28 @@ const MEMBER_DOT_COLORS = [
   'bg-orange-400',
 ] as const;
 
+/** 위젯에서 쓰는 같은 순서의 색 */
+const MEMBER_DOT_HEX = ['#FB7185', '#38BDF8', '#FBBF24', '#34D399', '#A78BFA', '#FB923C'] as const;
+
 /**
  * 멤버 순서에 맞는 일정 점 색을 돌려줍니다.
  *
  * @param userId 일정 주인 user id
  * @param members 워크스페이스 멤버 (순서대로 색을 배정)
  */
-export function memberDotClass(userId: string, members: { user_id: string }[]): string {
+function memberColorIndex(userId: string, members: { user_id: string }[]): number {
   const index = members.findIndex((member) => member.user_id === userId);
   const safe = index >= 0 ? index : 0;
-  return MEMBER_DOT_COLORS[safe % MEMBER_DOT_COLORS.length];
+  return safe % MEMBER_DOT_COLORS.length;
+}
+
+export function memberDotClass(userId: string, members: { user_id: string }[]): string {
+  return MEMBER_DOT_COLORS[memberColorIndex(userId, members)];
+}
+
+/** 위젯 점 색. #RRGGBB */
+export function memberDotHex(userId: string, members: { user_id: string }[]): string {
+  return MEMBER_DOT_HEX[memberColorIndex(userId, members)];
 }
 
 /** DB time 값을 화면용 HH:mm 로 줄입니다. */

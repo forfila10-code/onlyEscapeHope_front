@@ -24,6 +24,8 @@ import BudgetPanel from './BudgetPanel';
 import RecurringPanel from './RecurringPanel';
 import NicknameCard from './NicknameCard';
 import CategoryCard from './CategoryCard';
+import ScheduleWidgetSync from './ScheduleWidgetSync';
+import { clearScheduleWidget } from '../../lib/widget';
 
 const PERIODS: { id: PeriodCode; label: string }[] = [
   { id: 'THIS_MONTH', label: '이번 달' },
@@ -152,6 +154,7 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     localStorage.removeItem('currentWorkspaceId');
+    await clearScheduleWidget();
     await supabase.auth.signOut();
     router.replace('/login');
   };
@@ -242,6 +245,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#f2f3f7] font-sans">
+      <ScheduleWidgetSync />
       <header className="bg-white px-5 pt-12 pb-4 flex items-center justify-between sticky top-0 z-40 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
         <div>
           <p className="text-xs text-gray-400 font-medium">{periodLabel}</p>
