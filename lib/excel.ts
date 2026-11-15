@@ -23,7 +23,7 @@ export type ExcelSaveResult = 'shared' | 'downloaded' | 'cancelled' | 'blocked' 
 const EXCEL_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export const EXCEL_APP_UNSUPPORTED_MESSAGE =
-  '이 앱에서는 파일을 바로 저장할 수 없습니다. 휴대폰 브라우저(사파리·크롬)에서 같은 주소를 연 뒤 엑셀을 눌러 주세요.';
+  '이 앱 버전에서는 파일을 저장할 수 없습니다. 최신 앱을 다시 설치한 뒤 엑셀 버튼을 눌러 주세요.';
 
 /** 시트 이름·열 너비. 날짜 열은 yyyy-mm-dd로 고정합니다. */
 export const transactionSheetOptions = {
@@ -101,6 +101,16 @@ export async function toTransactionsXlsx(
  * @param filename 저장 파일명 (.xlsx)
  */
 export async function saveExcelFile(blob: Blob, filename: string): Promise<ExcelSaveResult> {
+  try {
+    const savedOnDevice = await saveExcelOnDevice(blob, filename);
+    if (savedOnDevice) return savedOnDevice;
+  } catch (error) {
+    if (isShareCancelled(error)) return 'cancelled';
+    console.error('[excel] 앱 저장 실패:', error);
+    alert('파일 저장에 실패했습니다.');
+    return 'cancelled';
+  }
+
   const file = new File([blob], filename, { type: EXCEL_MIME });
 
   if (shouldUseShareSheet() && canShareFile(file)) {
@@ -130,6 +140,54 @@ function parseLocalDate(value: string | null | undefined): Date | null {
   if (!match) return null;
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * 앱 캐시에 xlsx를 쓰고 시스템 저장/공유 창을 엽니다.
+ * 플러그인이 없는 예전 앱이면 null을 돌려 웹 저장으로 넘깁니다.
+ *
+ * @param blob xlsx 파일 내용
+ * @param filename 저장 파일명
+ */
+async function saveExcelOnDevice(blob: Blob, filename: string): Promise<ExcelSaveResult | null> {
+  if (!isNativeApp()) return null;
+  const { Capacitor } = await import('@capacitor/core');
+  if (!Capacitor.isPluginAvailable('Filesystem') || !Capacitor.isPluginAvailable('Share')) {
+    return null;
+  }
+
+  const { Directory, Filesystem } = await import('@capacitor/filesystem');
+  const { Share } = await import('@capacitor/share');
+  const written = await Filesystem.writeFile({
+    path: filename.replace(/[/\\]/g, '_'),
+    data: await blobToBase64(blob),
+    directory: Directory.Cache,
+  });
+  await Share.share({
+    title: filename,
+    dialogTitle: '엑셀 파일 저장',
+    files: [written.uri],
+  });
+  return 'shared';
+}
+
+/** Blob을 Filesystem 플러그인이 받는 base64 문자열로 바꿉니다. */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? '');
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function isShareCancelled(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /cancel/i.test(message);
 }
 
 /** 터치 기기·네이티브 앱은 다운로드 폴더 대신 공유 시트를 씁니다. */
