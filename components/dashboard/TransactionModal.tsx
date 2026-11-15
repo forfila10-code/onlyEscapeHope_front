@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { createClient } from '../../utils/supabase/client';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../lib/categories';
+import { CATEGORY_EMOJI_OPTIONS } from '../../lib/categories';
+import { useCategories } from '../../contexts/CategoryContext';
 import { addDays, toLocalISODate } from '../../lib/date';
 
 interface TransactionModalProps {
@@ -34,7 +35,11 @@ export default function TransactionModal({
     refreshWorkspaceData,
   } = useWorkspace();
 
+  const { expenseCategories, incomeCategories, addCategory } = useCategories();
   const [type, setType] = useState<'income' | 'expense'>('expense');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryEmoji, setNewCategoryEmoji] = useState<string>(CATEGORY_EMOJI_OPTIONS[0]);
   const [dateMode, setDateMode] = useState('today');
   const [customDate, setCustomDate] = useState('');
   const [amount, setAmount] = useState('');
@@ -48,7 +53,7 @@ export default function TransactionModal({
 
   const isEdit = Boolean(transaction?.id);
   const isSharedWorkspace = members.length > 1;
-  const categories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const categories = type === 'income' ? incomeCategories : expenseCategories;
 
   const resetForm = () => {
     setType('expense');
@@ -191,7 +196,7 @@ export default function TransactionModal({
 
   const handleTypeChange = (nextType: 'income' | 'expense') => {
     setType(nextType);
-    const nextCategories = nextType === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    const nextCategories = nextType === 'income' ? incomeCategories : expenseCategories;
     if (!nextCategories.some((item) => item.id === category)) {
       setCategory(nextCategories[0].id);
     }
@@ -323,7 +328,7 @@ export default function TransactionModal({
             <div className="grid grid-cols-3 gap-2">
               {categories.map((cat) => (
                 <button
-                  key={cat.id}
+                  key={cat.rowId ?? cat.id}
                   type="button"
                   onClick={() => setCategory(cat.id)}
                   className={`flex flex-col items-center justify-center py-4 rounded-2xl transition-all active:scale-95 ${
@@ -336,7 +341,59 @@ export default function TransactionModal({
                   <span className="text-xs font-semibold">{cat.label}</span>
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setAddingCategory((open) => !open)}
+                className="flex flex-col items-center justify-center py-4 rounded-2xl bg-blue-50 text-blue-500 active:scale-95"
+              >
+                <span className="text-2xl mb-1">＋</span>
+                <span className="text-xs font-semibold">추가</span>
+              </button>
             </div>
+            {addingCategory && (
+              <div className="mt-3 space-y-2">
+                <div className="flex gap-2 overflow-x-auto scrollbar-none">
+                  {CATEGORY_EMOJI_OPTIONS.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setNewCategoryEmoji(item)}
+                      className={`flex-shrink-0 w-9 h-9 rounded-xl text-lg ${
+                        newCategoryEmoji === item ? 'bg-gray-900' : 'bg-gray-100'
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={newCategoryName}
+                    onChange={(event) => setNewCategoryName(event.target.value)}
+                    placeholder="카테고리 이름"
+                    maxLength={12}
+                    className="flex-1 bg-gray-100 rounded-2xl px-4 py-3 text-sm font-semibold outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await addCategory(type === 'income' ? 'INCOME' : 'EXPENSE', newCategoryName, newCategoryEmoji);
+                        setCategory(newCategoryName.trim());
+                        setNewCategoryName('');
+                        setAddingCategory(false);
+                        setError('');
+                      } catch (addError) {
+                        setError(addError instanceof Error ? addError.message : '추가에 실패했습니다.');
+                      }
+                    }}
+                    className="px-4 rounded-2xl bg-blue-500 text-white text-sm font-bold"
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {isSharedWorkspace && (

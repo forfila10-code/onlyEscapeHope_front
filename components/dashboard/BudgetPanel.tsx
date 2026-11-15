@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { createClient } from '../../utils/supabase/client';
-import { EXPENSE_CATEGORIES, fmt, getCategoryMeta } from '../../lib/categories';
+import { fmt, getCategoryMeta } from '../../lib/categories';
+import { useCategories } from '../../contexts/CategoryContext';
 import { buildBudgetProgress } from '../../lib/budget';
 
 interface BudgetPanelProps {
@@ -25,6 +26,8 @@ interface BudgetPanelProps {
 export default function BudgetPanel({ year, month, compact = false }: BudgetPanelProps) {
   const supabase = createClient();
   const { currentWorkspaceId, refreshVersion, refreshWorkspaceData } = useWorkspace();
+  const { expenseCategories } = useCategories();
+  const categoryKey = expenseCategories.map((item) => item.id).join('|');
   const [spent, setSpent] = useState<Record<string, number>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -67,7 +70,7 @@ export default function BudgetPanel({ year, month, compact = false }: BudgetPane
       }
 
       const nextAmounts: Record<string, string> = {};
-      EXPENSE_CATEGORIES.forEach((c) => {
+      expenseCategories.forEach((c) => {
         nextAmounts[c.id] = '';
       });
       (budgetRes.data ?? []).forEach((row: { category: string; amount: number }) => {
@@ -89,7 +92,7 @@ export default function BudgetPanel({ year, month, compact = false }: BudgetPane
     return () => {
       cancelled = true;
     };
-  }, [currentWorkspaceId, year, month, refreshVersion, supabase]);
+  }, [categoryKey, currentWorkspaceId, expenseCategories, month, refreshVersion, supabase, year]);
 
   const progress = buildBudgetProgress(
     Object.entries(amounts)
@@ -102,7 +105,7 @@ export default function BudgetPanel({ year, month, compact = false }: BudgetPane
     if (!currentWorkspaceId) return;
     setSaving(true);
     setError('');
-    const rows = EXPENSE_CATEGORIES.map((c) => ({
+    const rows = expenseCategories.map((c) => ({
       workspace_id: currentWorkspaceId,
       year,
       month,
@@ -178,7 +181,7 @@ export default function BudgetPanel({ year, month, compact = false }: BudgetPane
         <p className="text-sm text-gray-400">불러오는 중…</p>
       ) : (
         <div className="space-y-3">
-          {EXPENSE_CATEGORIES.map((cat) => {
+          {expenseCategories.map((cat) => {
             const spentAmt = spent[cat.id] ?? 0;
             const budgetAmt = Number(amounts[cat.id] || 0);
             const over = budgetAmt > 0 && spentAmt > budgetAmt;

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { createClient } from '../../utils/supabase/client';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, fmt } from '../../lib/categories';
+import { fmt } from '../../lib/categories';
+import { useCategories } from '../../contexts/CategoryContext';
 import type { RecurringRule } from '../../lib/recurring';
 
 /**
@@ -13,6 +14,7 @@ export default function RecurringPanel() {
   const supabase = createClient();
   const { user, currentWorkspaceId, members, refreshWorkspaceData, refreshVersion } =
     useWorkspace();
+  const { expenseCategories, incomeCategories } = useCategories();
   const [rules, setRules] = useState<RecurringRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -24,7 +26,7 @@ export default function RecurringPanel() {
   const [paidBy, setPaidBy] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const categories = type === 'INCOME' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const categories = type === 'INCOME' ? incomeCategories : expenseCategories;
 
   useEffect(() => {
     if (!currentWorkspaceId) return;

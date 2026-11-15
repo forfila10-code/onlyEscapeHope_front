@@ -4,14 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { createClient } from '../../utils/supabase/client';
-import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  fmt,
-  getCategoryMeta,
-  getPayerNickname,
-  isIncome,
-} from '../../lib/categories';
+import { fmt, getCategoryMeta, getPayerNickname, isIncome } from '../../lib/categories';
+import { useCategories } from '../../contexts/CategoryContext';
 import { resolveHomeRange, type PeriodCode } from '../../lib/date';
 import {
   EXCEL_APP_UNSUPPORTED_MESSAGE,
@@ -57,13 +51,14 @@ export default function TransactionListClient() {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TxTypeFilter>('ALL');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const { expenseCategories, incomeCategories } = useCategories();
 
   const categoryOptions =
     typeFilter === 'INCOME'
-      ? INCOME_CATEGORIES
+      ? incomeCategories
       : typeFilter === 'EXPENSE'
-        ? EXPENSE_CATEGORIES
-        : [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
+        ? expenseCategories
+        : [...expenseCategories, ...incomeCategories];
 
   useEffect(() => {
     if (wsLoading) return;

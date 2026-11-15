@@ -23,6 +23,7 @@ import WorkspaceCreateModal from './WorkspaceCreateModal';
 import BudgetPanel from './BudgetPanel';
 import RecurringPanel from './RecurringPanel';
 import NicknameCard from './NicknameCard';
+import CategoryCard from './CategoryCard';
 
 const PERIODS: { id: PeriodCode; label: string }[] = [
   { id: 'THIS_MONTH', label: '이번 달' },
@@ -307,6 +308,11 @@ export default function Dashboard() {
                 <span className="text-gray-300">›</span>
               </button>
             </div>
+
+            <p className="px-1 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
+              가계부
+            </p>
+            <CategoryCard />
 
             <p className="px-1 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
               반복 거래
