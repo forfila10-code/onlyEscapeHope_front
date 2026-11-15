@@ -5,11 +5,19 @@ import { useCategories } from '../../contexts/CategoryContext';
 import { CATEGORY_EMOJI_OPTIONS, type CategoryKind } from '../../lib/categories';
 
 /**
- * 설정 탭의 카테고리 관리. 기본 항목은 유지하고, 추가한 항목만 지울 수 있습니다.
+ * 설정 탭의 카테고리 관리. 추가 항목은 지우고, 기본 항목은 목록에서 숨깁니다.
  */
 export default function CategoryCard() {
-  const { expenseCategories, incomeCategories, loadError, addCategory, removeCategory } =
-    useCategories();
+  const {
+    expenseCategories,
+    incomeCategories,
+    hiddenExpense,
+    hiddenIncome,
+    loadError,
+    addCategory,
+    removeCategory,
+    restoreCategory,
+  } = useCategories();
   const [kind, setKind] = useState<CategoryKind>('EXPENSE');
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState<string>(CATEGORY_EMOJI_OPTIONS[0]);
@@ -17,6 +25,7 @@ export default function CategoryCard() {
   const [message, setMessage] = useState('');
 
   const list = kind === 'INCOME' ? incomeCategories : expenseCategories;
+  const hidden = kind === 'INCOME' ? hiddenIncome : hiddenExpense;
 
   const handleAdd = async () => {
     setSaving(true);
@@ -32,15 +41,26 @@ export default function CategoryCard() {
     }
   };
 
-  const handleRemove = async (rowId: string, label: string) => {
-    if (!window.confirm(`「${label}」 카테고리를 삭제할까요? 이미 기록된 거래는 그대로 남습니다.`)) {
+  const handleRemove = async (item: (typeof list)[number]) => {
+    if (!window.confirm(`「${item.label}」 카테고리를 삭제할까요? 이미 기록된 거래는 그대로 남습니다.`)) {
       return;
     }
     setMessage('');
     try {
-      await removeCategory(rowId);
+      await removeCategory(item);
+      setMessage('삭제했습니다.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '삭제에 실패했습니다.');
+    }
+  };
+
+  const handleRestore = async (rowId: string) => {
+    setMessage('');
+    try {
+      await restoreCategory(rowId);
+      setMessage('다시 넣었습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '되돌리기에 실패했습니다.');
     }
   };
 
@@ -66,26 +86,42 @@ export default function CategoryCard() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="divide-y divide-gray-50">
         {list.map((item) => (
-          <span
-            key={item.rowId ?? item.id}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700"
-          >
-            {item.emoji} {item.label}
-            {item.custom && item.rowId && (
-              <button
-                type="button"
-                onClick={() => handleRemove(item.rowId!, item.label)}
-                className="text-gray-400 font-bold"
-                aria-label={`${item.label} 삭제`}
-              >
-                ×
-              </button>
-            )}
-          </span>
+          <div key={item.rowId ?? item.id} className="flex items-center gap-3 py-2.5">
+            <span className="flex-1 text-sm font-semibold text-gray-800">
+              {item.emoji} {item.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleRemove(item)}
+              className="text-xs font-bold text-red-400 active:opacity-50"
+            >
+              삭제
+            </button>
+          </div>
         ))}
       </div>
+
+      {hidden.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-bold text-gray-400">삭제한 기본 항목</p>
+          {hidden.map((item) => (
+            <div key={item.rowId} className="flex items-center gap-3 py-1">
+              <span className="flex-1 text-xs text-gray-400">
+                {item.emoji} {item.label}
+              </span>
+              <button
+                type="button"
+                onClick={() => item.rowId && handleRestore(item.rowId)}
+                className="text-xs font-bold text-blue-500"
+              >
+                되돌리기
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-2 overflow-x-auto scrollbar-none">
         {CATEGORY_EMOJI_OPTIONS.map((item) => (
