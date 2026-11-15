@@ -25,6 +25,7 @@ where schemaname = 'public'
     'transactions',
     'category_budgets',
     'recurring_rules',
-    'workspace_categories'
+    'workspace_categories',
+    'schedules'
   )
 order by 1;

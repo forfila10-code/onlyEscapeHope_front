@@ -18,6 +18,8 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { createClient } from '../../utils/supabase/client';
 import { fmt, getCategoryMeta, getPayerNickname, isIncome } from '../../lib/categories';
 import { toLocalISODate } from '../../lib/date';
+import { memberDotClass, type ScheduleItem } from '../../lib/schedules';
+import ScheduleDayCard from './ScheduleDayCard';
 
 /** Supabase transactions 행 → UI용 거래 객체 */
 export interface TransactionItem {
@@ -73,12 +75,15 @@ export default function MonthlyDashboard({
   const supabase = createClient();
   const today = new Date();
   // 선택된 워크스페이스 ID와 refetch 버전을 기준으로 월별 거래 목록을 다시 불러옵니다.
-  const { currentWorkspaceId, members, refreshVersion } = useWorkspace();
+  const { user, currentWorkspaceId, members, refreshVersion } = useWorkspace();
 
   // year/month primitive만 의존해야 렌더마다 새 Date로 조회가 반복되지 않습니다.
   const currentMonth = useMemo(() => new Date(year, month - 1, 1), [year, month]);
   const [selectedDate, setSelectedDate] = useState(today);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
+  const [scheduleTick, setScheduleTick] = useState(0);
+  const [mode, setMode] = useState<'money' | 'schedule'>('money');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<'auth' | 'server' | null>(null);
 
@@ -107,26 +112,51 @@ export default function MonthlyDashboard({
       setLoading(true);
       setError(null);
       try {
-        const { data, error: fetchError } = await supabase
-          .from('transactions')
-          .select('id, date, amount, type, category, memo, paid_by')
-          .eq('workspace_id', currentWorkspaceId)
-          .gte('date', rangeStart)
-          .lte('date', rangeEnd)
-          .order('date', { ascending: true });
+        const [txRes, scheduleRes] = await Promise.all([
+          supabase
+            .from('transactions')
+            .select('id, date, amount, type, category, memo, paid_by')
+            .eq('workspace_id', currentWorkspaceId)
+            .gte('date', rangeStart)
+            .lte('date', rangeEnd)
+            .order('date', { ascending: true }),
+          supabase
+            .from('schedules')
+            .select('id, date, title, start_time, owner_id, memo')
+            .eq('workspace_id', currentWorkspaceId)
+            .gte('date', rangeStart)
+            .lte('date', rangeEnd)
+            .order('start_time', { ascending: true }),
+        ]);
 
         if (cancelled) return;
 
-        if (fetchError) {
-          console.error('[MonthlyDashboard] 거래 내역 로딩 실패:', fetchError);
+        if (txRes.error) {
+          console.error('[MonthlyDashboard] 거래 내역 로딩 실패:', txRes.error);
           const isAuth =
-            fetchError.code === 'PGRST301' ||
-            fetchError.message?.includes('JWT') ||
-            fetchError.message?.includes('auth');
+            txRes.error.code === 'PGRST301' ||
+            txRes.error.message?.includes('JWT') ||
+            txRes.error.message?.includes('auth');
           setError(isAuth ? 'auth' : 'server');
           setTransactions([]);
         } else {
-          setTransactions((data ?? []).map(mapTransaction));
+          setTransactions((txRes.data ?? []).map(mapTransaction));
+        }
+
+        if (scheduleRes.error) {
+          console.error('[MonthlyDashboard] 일정 로딩 실패:', scheduleRes.error);
+          setSchedules([]);
+        } else {
+          setSchedules(
+            (scheduleRes.data ?? []).map((row) => ({
+              id: row.id,
+              date: normalizeDate(row.date),
+              title: row.title,
+              start_time: row.start_time,
+              owner_id: row.owner_id,
+              memo: row.memo,
+            }))
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -137,7 +167,7 @@ export default function MonthlyDashboard({
     return () => {
       cancelled = true;
     };
-  }, [year, month, currentWorkspaceId, refreshVersion, supabase]);
+  }, [year, month, currentWorkspaceId, refreshVersion, scheduleTick, supabase]);
 
   // ── 날짜별 집계 맵 { "YYYY-MM-DD": { income, expense, items[] } } ──
   const dailyMap = useMemo(() => {
@@ -158,6 +188,16 @@ export default function MonthlyDashboard({
     return map;
   }, [transactions]);
 
+  const scheduleByDate = useMemo(() => {
+    const map: Record<string, ScheduleItem[]> = {};
+    schedules.forEach((item) => {
+      if (!item.date) return;
+      if (!map[item.date]) map[item.date] = [];
+      map[item.date].push(item);
+    });
+    return map;
+  }, [schedules]);
+
   // ── 달력 날짜 배열 생성 ──
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
@@ -169,6 +209,7 @@ export default function MonthlyDashboard({
 
   const selectedKey = format(selectedDate, 'yyyy-MM-dd');
   const selectedItems = dailyMap[selectedKey]?.items ?? [];
+  const selectedSchedules = scheduleByDate[selectedKey] ?? [];
 
   const moveMonth = (offset: number) => {
     const next = new Date(year, month - 1 + offset, 1);
@@ -196,7 +237,24 @@ export default function MonthlyDashboard({
     <div className="flex flex-col gap-3">
       {/* ──────── 달력 카드 ──────── */}
       <div className="bg-white rounded-3xl overflow-hidden shadow-sm">
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+        <div className="flex bg-gray-100 rounded-2xl p-1 mx-5 mt-5">
+          {([
+            { id: 'money', label: '가계' },
+            { id: 'schedule', label: '일정' },
+          ] as const).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setMode(item.id)}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold ${
+                mode === item.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <button
             onClick={prevMonth}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 active:scale-90 transition-transform text-sm font-bold"
@@ -208,9 +266,15 @@ export default function MonthlyDashboard({
               {format(currentMonth, 'yyyy년 M월', { locale: ko })}
             </p>
             <p className="text-xs text-gray-400 mt-0.5">
-              <span className="text-blue-500 font-semibold">+{fmt(monthlyTotal.income)}</span>
-              <span className="mx-1.5 text-gray-300">|</span>
-              <span className="text-red-400 font-semibold">-{fmt(monthlyTotal.expense)}</span>
+              {mode === 'money' ? (
+                <>
+                  <span className="text-blue-500 font-semibold">+{fmt(monthlyTotal.income)}</span>
+                  <span className="mx-1.5 text-gray-300">|</span>
+                  <span className="text-red-400 font-semibold">-{fmt(monthlyTotal.expense)}</span>
+                </>
+              ) : (
+                <span className="font-semibold text-gray-500">일정 {schedules.length}개</span>
+              )}
             </p>
           </div>
           <button
@@ -238,6 +302,8 @@ export default function MonthlyDashboard({
             {calendarDays.map((day) => {
               const key = format(day, 'yyyy-MM-dd');
               const dayData = dailyMap[key];
+              const daySchedules = scheduleByDate[key] ?? [];
+              const ownerDots = [...new Set(daySchedules.map((item) => item.owner_id))].slice(0, 3);
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isSelected = isSameDay(day, selectedDate);
               const isTodayDay = isToday(day);
@@ -272,7 +338,7 @@ export default function MonthlyDashboard({
                     {dayNum}
                   </span>
 
-                  {dayData?.expense > 0 && (
+                  {mode === 'money' && dayData?.expense > 0 && (
                     <span
                       className={`text-[8px] font-semibold leading-none truncate w-full text-center ${
                         isSelected ? 'text-red-300' : 'text-red-400'
@@ -281,7 +347,7 @@ export default function MonthlyDashboard({
                       -{fmt(dayData.expense)}
                     </span>
                   )}
-                  {dayData?.income > 0 && (
+                  {mode === 'money' && dayData?.income > 0 && (
                     <span
                       className={`text-[8px] font-semibold leading-none truncate w-full text-center ${
                         isSelected ? 'text-blue-300' : 'text-blue-500'
@@ -290,7 +356,24 @@ export default function MonthlyDashboard({
                       +{fmt(dayData.income)}
                     </span>
                   )}
-                  {!dayData && <span className="text-[8px] leading-none">&nbsp;</span>}
+                  {ownerDots.length > 0 && (
+                    <span className="flex gap-0.5 mt-0.5">
+                      {ownerDots.map((ownerId) => (
+                        <span
+                          key={ownerId}
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isSelected ? 'bg-white' : memberDotClass(ownerId, members)
+                          }`}
+                        />
+                      ))}
+                    </span>
+                  )}
+                  {mode === 'money' && !dayData && ownerDots.length === 0 && (
+                    <span className="text-[8px] leading-none">&nbsp;</span>
+                  )}
+                  {mode === 'schedule' && ownerDots.length === 0 && (
+                    <span className="text-[8px] leading-none">&nbsp;</span>
+                  )}
                 </button>
               );
             })}
@@ -330,7 +413,18 @@ export default function MonthlyDashboard({
         )}
       </div>
 
-      {/* ──────── 일일 리스트 카드 ──────── */}
+      {mode === 'schedule' && currentWorkspaceId && user ? (
+        <ScheduleDayCard
+          date={selectedDate}
+          items={selectedSchedules}
+          workspaceId={currentWorkspaceId}
+          userId={user.id}
+          members={members}
+          onChanged={() => setScheduleTick((tick) => tick + 1)}
+        />
+      ) : null}
+
+      {mode === 'money' && (
       <div className="bg-white rounded-3xl overflow-hidden shadow-sm">
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <div>
@@ -407,6 +501,7 @@ export default function MonthlyDashboard({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
