@@ -13,7 +13,11 @@ import {
   isIncome,
 } from '../../lib/categories';
 import { resolveHomeRange, type PeriodCode } from '../../lib/date';
-import { downloadTransactionsCsv } from '../../lib/csv';
+import {
+  EXCEL_APP_UNSUPPORTED_MESSAGE,
+  saveExcelFile,
+  toTransactionsXlsx,
+} from '../../lib/excel';
 import { matchesTxSearch, type TxTypeFilter } from '../../lib/search';
 import TransactionModal from '../../components/dashboard/TransactionModal';
 import type { Transaction } from '../../lib/types';
@@ -29,7 +33,7 @@ const PERIODS: { id: ListPeriod; label: string }[] = [
 ];
 
 /**
- * 전체 거래 내역 목록 + 검색/필터 + 기간 CSV 내보내기
+ * 전체 거래 내역 목록 + 검색/필터 + 기간 엑셀 내보내기
  */
 export default function TransactionListClient() {
   const router = useRouter();
@@ -48,7 +52,8 @@ export default function TransactionListClient() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [period, setPeriod] = useState<ListPeriod>('THIS_MONTH');
-  const [exporting, setExporting] = useState(false);
+  /** 클릭이 끊겨 바로 저장이 막힌 엑셀. 버튼을 한 번 더 누르면 저장됩니다. */
+  const [exportFile, setExportFile] = useState<{ blob: Blob; filename: string } | null>(null);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TxTypeFilter>('ALL');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -115,12 +120,29 @@ export default function TransactionListClient() {
     });
   }, [transactions, typeFilter, categoryFilter, query, members]);
 
-  const handleExport = () => {
-    if (exporting) return;
-    setExporting(true);
+  // 기간·검색이 바뀌면 이전에 만들어 둔 엑셀은 버립니다.
+  useEffect(() => {
+    setExportFile(null);
+  }, [period, query, typeFilter, categoryFilter]);
+
+  const handleExport = async () => {
+    if (filtered.length === 0 && !exportFile) return;
+
+    // 이미 만들어 둔 파일이면 이번 클릭에서 바로 저장합니다.
+    if (exportFile) {
+      const result = await saveExcelFile(exportFile.blob, exportFile.filename);
+      if (result === 'unsupported') alert(EXCEL_APP_UNSUPPORTED_MESSAGE);
+      if (result === 'shared' || result === 'downloaded') setExportFile(null);
+      return;
+    }
+
     const stamp = period === 'ALL' ? 'all' : period.toLowerCase();
-    downloadTransactionsCsv(filtered, `pocketfree-${stamp}.csv`, members);
-    setExporting(false);
+    const filename = `pocketfree-${stamp}.xlsx`;
+    const blob = await toTransactionsXlsx(filtered, members);
+    const result = await saveExcelFile(blob, filename);
+    if (result === 'blocked') setExportFile({ blob, filename });
+    else if (result === 'unsupported') alert(EXCEL_APP_UNSUPPORTED_MESSAGE);
+    else setExportFile(null);
   };
 
   const groups: Record<string, Transaction[]> = {};
@@ -152,10 +174,10 @@ export default function TransactionListClient() {
           <button
             type="button"
             onClick={handleExport}
-            disabled={loading || exporting || filtered.length === 0}
+            disabled={loading || (filtered.length === 0 && !exportFile)}
             className="text-xs font-bold text-blue-500 disabled:text-gray-300"
           >
-            CSV 내보내기
+            {exportFile ? '눌러서 저장' : '엑셀 저장'}
           </button>
         </div>
 

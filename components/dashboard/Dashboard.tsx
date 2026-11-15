@@ -6,7 +6,12 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { createClient } from '../../utils/supabase/client';
 import { fmt, getCategoryMeta, getPayerNickname, isIncome } from '../../lib/categories';
 import { periodYearMonth, resolveHomeRange, type PeriodCode } from '../../lib/date';
-import { downloadTransactionsCsv } from '../../lib/csv';
+import {
+  EXCEL_APP_UNSUPPORTED_MESSAGE,
+  saveExcelFile,
+  toTransactionsXlsx,
+  type ExcelTransactionRow,
+} from '../../lib/excel';
 import type { Transaction } from '../../lib/types';
 import BottomNav from './BottomNav';
 import TransactionModal from './TransactionModal';
@@ -58,9 +63,16 @@ export default function Dashboard() {
   const [ledgerMonth, setLedgerMonth] = useState(now.getMonth() + 1);
   const [createOpen, setCreateOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  /** 클릭이 끊겨 바로 저장이 막힌 엑셀. 버튼을 한 번 더 누르면 저장됩니다. */
+  const [exportFile, setExportFile] = useState<{ blob: Blob; filename: string } | null>(null);
 
   const periodLabel = PERIODS.find((p) => p.id === period)?.label ?? '이번 달';
   const budgetPeriod = periodYearMonth(period);
+
+  // 기간이 바뀌면 이전에 만들어 둔 엑셀은 버립니다.
+  useEffect(() => {
+    setExportFile(null);
+  }, [period, currentWorkspaceId]);
 
   const shiftLedger = (delta: number) => {
     const date = new Date(ledgerYear, ledgerMonth - 1 + delta, 1);
@@ -144,26 +156,54 @@ export default function Dashboard() {
   };
 
   const handleExportPeriod = async () => {
-    if (!currentWorkspaceId) return;
-    setExporting(true);
-    const { startDate, endDate } = resolveHomeRange(period);
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('date, type, category, amount, memo, paid_by')
-      .eq('workspace_id', currentWorkspaceId)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: false });
-    setExporting(false);
-    if (error) {
-      alert('내보내기에 실패했습니다.');
+    if (!currentWorkspaceId || exporting) return;
+
+    // 이미 만들어 둔 파일이면 이번 클릭에서 바로 저장합니다. (조회 대기가 없음)
+    if (exportFile) {
+      const result = await saveExcelFile(exportFile.blob, exportFile.filename);
+      if (result === 'unsupported') alert(EXCEL_APP_UNSUPPORTED_MESSAGE);
+      if (result === 'shared' || result === 'downloaded') setExportFile(null);
       return;
     }
-    downloadTransactionsCsv(
-      data ?? [],
-      `pocketfree-${startDate}-${endDate}.csv`,
-      members
-    );
+
+    setExporting(true);
+    const { startDate, endDate } = resolveHomeRange(period);
+    const filename = `pocketfree-${startDate}-${endDate}.xlsx`;
+    // Supabase는 한 번에 최대 1000건만 주므로, 기간 전체를 페이지로 이어 받습니다.
+    const pageSize = 1000;
+    const rows: ExcelTransactionRow[] = [];
+    try {
+      for (let from = 0; from < 10000; from += pageSize) {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('id, date, type, category, amount, memo, paid_by')
+          .eq('workspace_id', currentWorkspaceId)
+          .gte('date', startDate)
+          .lte('date', endDate)
+          .order('date', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) {
+          alert('내보내기에 실패했습니다.');
+          return;
+        }
+        rows.push(...((data ?? []) as ExcelTransactionRow[]));
+        if (!data || data.length < pageSize) break;
+      }
+
+      if (rows.length === 0) {
+        alert('이 기간에 내보낼 내역이 없습니다.');
+        return;
+      }
+
+      const blob = await toTransactionsXlsx(rows, members);
+      const result = await saveExcelFile(blob, filename);
+      if (result === 'blocked') setExportFile({ blob, filename });
+      else if (result === 'unsupported') alert(EXCEL_APP_UNSUPPORTED_MESSAGE);
+      else setExportFile(null);
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (wsLoading) {
@@ -388,9 +428,9 @@ export default function Dashboard() {
                     type="button"
                     onClick={handleExportPeriod}
                     disabled={exporting}
-                    className="text-xs text-gray-400 font-semibold active:opacity-50"
+                    className="text-xs text-blue-500 font-semibold active:opacity-50 disabled:text-gray-300"
                   >
-                    {exporting ? '내보내는 중…' : 'CSV'}
+                    {exporting ? '내보내는 중…' : exportFile ? '눌러서 저장' : '엑셀'}
                   </button>
                   <button
                     type="button"
